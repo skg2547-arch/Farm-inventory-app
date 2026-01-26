@@ -165,7 +165,7 @@ The backend has been tested and verified:
 
 All dependencies have been installed and verified:
 - `express@^4.17.1` - Web framework
-- `mongoose@^5.10.9` - MongoDB ODM
+- `mongoose@^6.13.8` - MongoDB ODM (upgraded from 5.x to fix security vulnerabilities)
 - `dotenv@^8.2.0` - Environment variable management
 
 ## Next Steps

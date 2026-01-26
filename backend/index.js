@@ -2,6 +2,9 @@ require('dotenv').config();
 const express = require('express');
 const mongoose = require('mongoose');
 
+// Set strictQuery to suppress Mongoose 7 deprecation warning
+mongoose.set('strictQuery', false);
+
 const app = express();
 const PORT = process.env.PORT || 5000;
 const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/farm-inventory';
@@ -36,10 +39,6 @@ const connectDB = async () => {
     console.log(`📍 MongoDB URI: ${MONGODB_URI.replace(/\/\/([^:]+):([^@]+)@/, '//$1:****@')}`);
     
     await mongoose.connect(MONGODB_URI, {
-      useNewUrlParser: true,
-      useUnifiedTopology: true,
-      useCreateIndex: true,
-      useFindAndModify: false,
       serverSelectionTimeoutMS: 5000,
       socketTimeoutMS: 45000,
     });

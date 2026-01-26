@@ -70,7 +70,7 @@ For detailed backend documentation, see [backend/README.md](backend/README.md).
 ## Technology Stack
 
 - **Backend:** Node.js with Express.js (v4.17.1)
-- **Database:** MongoDB with Mongoose (v5.10.9)
+- **Database:** MongoDB with Mongoose (v6.13.8 - patched for security vulnerabilities)
 - **Environment Management:** dotenv (v8.2.0)
 
 ## Development Status
