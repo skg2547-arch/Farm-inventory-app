@@ -90,11 +90,12 @@ mongoose.connection.on('disconnected', () => {
 });
 
 // Middleware to check database connection for API routes
+// Implements graceful degradation by returning informative errors when database is unavailable
 const checkDatabaseConnection = (req, res, next) => {
   if (mongoose.connection.readyState !== 1) {
     return res.status(503).json({
       error: 'Database unavailable',
-      message: 'MongoDB connection is not established. Please configure MONGODB_URI and restart the server.',
+      message: 'MongoDB is not currently connected. Database features are unavailable in fallback mode.',
       database: 'disconnected'
     });
   }
@@ -103,20 +104,20 @@ const checkDatabaseConnection = (req, res, next) => {
 
 // Inventory API Routes
 
-// Get all inventory items
-app.get('/api/items', checkDatabaseConnection, async (req, res) => {
+// Get low stock items (must be before /:id to avoid matching 'low-stock' as an ID)
+app.get('/api/items/low-stock', checkDatabaseConnection, async (req, res) => {
   try {
-    const items = await Inventory.find();
+    const items = await Inventory.find({ $expr: { $lte: ['$quantity', '$lowStockThreshold'] } });
     res.json(items);
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
 });
 
-// Get low stock items
-app.get('/api/items/low-stock', checkDatabaseConnection, async (req, res) => {
+// Get all inventory items
+app.get('/api/items', checkDatabaseConnection, async (req, res) => {
   try {
-    const items = await Inventory.find({ $expr: { $lte: ['$quantity', '$lowStockThreshold'] } });
+    const items = await Inventory.find();
     res.json(items);
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -132,6 +133,10 @@ app.get('/api/items/:id', checkDatabaseConnection, async (req, res) => {
     }
     res.json(item);
   } catch (error) {
+    // Handle invalid MongoDB ObjectId format
+    if (error.name === 'CastError') {
+      return res.status(400).json({ error: 'Invalid item ID format' });
+    }
     res.status(500).json({ error: error.message });
   }
 });
@@ -139,10 +144,19 @@ app.get('/api/items/:id', checkDatabaseConnection, async (req, res) => {
 // Create a new item
 app.post('/api/items', checkDatabaseConnection, async (req, res) => {
   try {
+    // Basic validation - Mongoose schema handles detailed validation
+    if (!req.body.name) {
+      return res.status(400).json({ error: 'Item name is required' });
+    }
+    
     const item = new Inventory(req.body);
     await item.save();
     res.status(201).json(item);
   } catch (error) {
+    // Handle validation errors
+    if (error.name === 'ValidationError') {
+      return res.status(400).json({ error: error.message });
+    }
     res.status(400).json({ error: error.message });
   }
 });
@@ -150,12 +164,23 @@ app.post('/api/items', checkDatabaseConnection, async (req, res) => {
 // Update an item
 app.put('/api/items/:id', checkDatabaseConnection, async (req, res) => {
   try {
-    const item = await Inventory.findByIdAndUpdate(req.params.id, req.body, { new: true });
+    const item = await Inventory.findByIdAndUpdate(req.params.id, req.body, { 
+      new: true,
+      runValidators: true  // Ensure schema validation runs on updates
+    });
     if (!item) {
       return res.status(404).json({ error: 'Item not found' });
     }
     res.json(item);
   } catch (error) {
+    // Handle invalid MongoDB ObjectId format
+    if (error.name === 'CastError') {
+      return res.status(400).json({ error: 'Invalid item ID format' });
+    }
+    // Handle validation errors
+    if (error.name === 'ValidationError') {
+      return res.status(400).json({ error: error.message });
+    }
     res.status(400).json({ error: error.message });
   }
 });
@@ -169,6 +194,10 @@ app.delete('/api/items/:id', checkDatabaseConnection, async (req, res) => {
     }
     res.json({ message: 'Item deleted successfully' });
   } catch (error) {
+    // Handle invalid MongoDB ObjectId format
+    if (error.name === 'CastError') {
+      return res.status(400).json({ error: 'Invalid item ID format' });
+    }
     res.status(500).json({ error: error.message });
   }
 });
