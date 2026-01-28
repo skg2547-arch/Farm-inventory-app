@@ -259,7 +259,8 @@ app.use((req, res) => {
 });
 
 // Error handling middleware
-app.use((err, req, res, next) => {
+// Note: 'next' parameter required for Express to recognize this as error handler
+app.use((err, req, res, _next) => {
   console.error('❌ Error occurred:', err);
   res.status(err.status || 500).json({
     error: err.message || 'Internal Server Error',
