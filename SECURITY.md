@@ -3,6 +3,8 @@
 ## Overview
 This document summarizes the security vulnerabilities fixed during the integration of PR #1 and PR #2 for the Farm Inventory App.
 
+**Note**: This merge resolves conflicts between PR #3 (which integrated fixes from PR #1 and #2) and the main branch. The main branch was at mongoose 6.13.6, while PR #3 upgraded to 6.13.8 for additional security patches. This document describes the complete security improvement history.
+
 ## Critical Vulnerabilities Fixed
 
 ### 1. Mongoose Search Injection Vulnerabilities

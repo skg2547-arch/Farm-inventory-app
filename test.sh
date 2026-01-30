@@ -63,12 +63,12 @@ else
     echo "$AUDIT_RESULT"
 fi
 
-# Check mongoose version
+# Check mongoose version (must be >= 6.13.8 for security patches)
 MONGOOSE_VERSION=$(npm list mongoose --depth=0 2>/dev/null | grep mongoose@ | sed 's/.*mongoose@//' | sed 's/ .*//')
-if [[ "$MONGOOSE_VERSION" == 6.13.* ]]; then
-    test_result 0 "Mongoose version is 6.13.x (secure)"
+if [[ "$MONGOOSE_VERSION" == "6.13.8" ]] || [[ "$MONGOOSE_VERSION" > "6.13.8" ]]; then
+    test_result 0 "Mongoose version is 6.13.8 or higher (secure)"
 else
-    test_result 1 "Mongoose version check (found: $MONGOOSE_VERSION)"
+    test_result 1 "Mongoose version check (found: $MONGOOSE_VERSION, need: >= 6.13.8)"
 fi
 
 echo ""

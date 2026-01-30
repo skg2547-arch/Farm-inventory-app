@@ -157,7 +157,7 @@ app.post('/api/items', checkDatabaseConnection, async (req, res) => {
     if (error.name === 'ValidationError') {
       return res.status(400).json({ error: error.message });
     }
-    res.status(400).json({ error: error.message });
+    res.status(500).json({ error: error.message });
   }
 });
 
@@ -181,7 +181,7 @@ app.put('/api/items/:id', checkDatabaseConnection, async (req, res) => {
     if (error.name === 'ValidationError') {
       return res.status(400).json({ error: error.message });
     }
-    res.status(400).json({ error: error.message });
+    res.status(500).json({ error: error.message });
   }
 });
 
