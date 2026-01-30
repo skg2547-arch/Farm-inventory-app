@@ -1,86 +1,107 @@
 # Farm Inventory App
 
-This application helps manage inventory items and their compatibility with vehicles/equipment on a farm.
+A comprehensive backend application for managing farm inventory items and their compatibility with vehicles/equipment.
 
 ## Features
-- Track inventory quantities with details like names, categories, and applicable vehicles.
-- Map items like tires or alternators to multiple vehicles, ensuring compatibility tracking.
-- Maintain separate records per vehicle for oil changes, part replacements, and service history.
-- Low-stock alerts for managing inventory effectively.
+- **Inventory Management**: Track items with names, categories, quantities, and compatible vehicles
+- **Low-Stock Alerts**: Automatically identify items below their threshold
+- **REST API**: Full CRUD operations for inventory management
+- **MongoDB Integration**: Persistent storage with graceful fallback mode
+- **Resilient Design**: Server runs successfully even without database connection
 
 ## Quick Start
 
-### Backend Server
+### Prerequisites
+- Node.js (v12 or higher)
+- npm (v6 or higher)
+- MongoDB (optional - server runs in fallback mode without it)
 
-1. Navigate to the backend directory:
+### Installation
+
+1. **Clone and navigate to the backend:**
    ```bash
    cd backend
    ```
 
-2. Install dependencies:
+2. **Install dependencies:**
    ```bash
    npm install
    ```
 
-3. Start the server:
+3. **(Optional) Configure environment:**
+   ```bash
+   cp .env.example .env
+   # Edit .env with your settings
+   ```
+
+4. **Start the server:**
    ```bash
    npm start
    ```
 
-The backend server will start on `http://localhost:5000` (or the port specified in your `.env` file).
+The server will start on `http://localhost:5000` (or your configured PORT).
 
-### Configuration (Optional)
+### Configuration
 
-To customize the configuration:
+Create a `.env` file in the `backend` directory:
 
-1. Create a `.env` file in the `backend` directory:
-   ```bash
-   cd backend
-   cp .env.example .env
-   ```
-
-2. Edit `.env` with your settings:
-   ```env
-   PORT=5000
-   NODE_ENV=development
-   MONGODB_URI=mongodb://localhost:27017/farm-inventory
-   ```
-
-**Note:** The server will run successfully even without MongoDB. If MongoDB is not available, it operates in fallback mode with helpful warnings.
-
-### Available Endpoints
-
-- `GET /` - API information and status
-- `GET /health` - Server health check with database status
-
-### Testing the Server
-
-```bash
-# Test root endpoint
-curl http://localhost:5000/
-
-# Test health endpoint
-curl http://localhost:5000/health
+```env
+PORT=5000
+NODE_ENV=development
+MONGODB_URI=mongodb://localhost:27017/farm-inventory
 ```
 
-## Documentation
+**Note:** The server operates in fallback mode if MongoDB is unavailable - all endpoints remain accessible but database operations return empty results.
 
-For detailed backend documentation, see [backend/README.md](backend/README.md).
+## API Endpoints
+
+### Information & Health
+- `GET /` - API information and available endpoints
+- `GET /health` - Server health check with database status
+
+### Inventory Management
+- `GET /api/items` - Get all inventory items
+- `POST /api/items` - Create a new inventory item
+- `GET /api/items/low-stock` - Get items below their low stock threshold
+- `GET /api/items/:id` - Get a specific item by ID
+- `PUT /api/items/:id` - Update an item by ID
+- `DELETE /api/items/:id` - Delete an item by ID
+
+### Example Usage
+
+```bash
+# Check server health
+curl http://localhost:5000/health
+
+# Create an inventory item
+curl -X POST http://localhost:5000/api/items \
+  -H "Content-Type: application/json" \
+  -d '{"name":"Oil Filter","category":"Parts","quantity":10,"vehicles":["Tractor","Truck"],"lowStockThreshold":5}'
+
+# Get all items
+curl http://localhost:5000/api/items
+
+# Get low stock items
+curl http://localhost:5000/api/items/low-stock
+```
 
 ## Technology Stack
 
 - **Backend:** Node.js with Express.js (v4.17.1)
-- **Database:** MongoDB with Mongoose (v6.13.8 - patched for security vulnerabilities)
-- **Environment Management:** dotenv (v8.2.0)
+- **Database:** MongoDB with Mongoose (v6.13.8 - security patched)
+- **Environment:** dotenv (v8.2.0)
 
-## Development Status
+## Security
 
-The backend infrastructure is complete with:
-- ✅ Express server with MongoDB integration
-- ✅ Environment variable configuration
-- ✅ Comprehensive error handling
-- ✅ Graceful shutdown mechanisms
-- ✅ Health monitoring endpoints
-- ✅ Fallback mode for MongoDB unavailability
+- ✅ Mongoose upgraded to v6.13.8 to patch search injection vulnerabilities
+- ✅ No security vulnerabilities (`npm audit` clean)
+- ✅ Environment variables for sensitive configuration
+- ✅ Comprehensive error handling to prevent information leakage
 
-Stay tuned for further updates as development progresses!
+## Development
+
+See [backend/README.md](backend/README.md) for detailed backend documentation.
+
+## License
+
+This project is part of the Farm Inventory App.

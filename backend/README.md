@@ -1,166 +1,253 @@
 # Farm Inventory App - Backend
 
-## Overview
-Express.js backend server for the Farm Inventory Application with MongoDB integration, comprehensive error handling, and graceful fallback modes.
+Express.js backend server for managing farm inventory with MongoDB integration, comprehensive error handling, and graceful fallback modes.
 
-## Features
-- ✅ Express.js REST API server
-- ✅ MongoDB connection with automatic fallback
-- ✅ Environment variable configuration
-- ✅ Comprehensive error handling (uncaught exceptions, unhandled rejections)
-- ✅ Graceful shutdown (SIGINT, SIGTERM)
-- ✅ Health check endpoint
-- ✅ Meaningful startup and runtime logs
+## Architecture Overview
 
-## Prerequisites
-- Node.js (v12 or higher recommended)
-- npm (v6 or higher)
-- MongoDB (optional - server runs in fallback mode without it)
+### Key Components
+- **Express Server**: RESTful API with JSON middleware
+- **Mongoose ODM**: MongoDB object modeling with schema validation
+- **Dotenv**: Environment configuration management
+- **Error Handling**: Comprehensive exception and rejection handlers
+- **Graceful Shutdown**: SIGINT/SIGTERM handlers with connection cleanup
 
-## Installation
+### MongoDB Fallback Pattern
 
-1. Navigate to the backend directory:
-```bash
-cd backend
+The server implements a graceful degradation pattern:
+```javascript
+// Connection attempt with timeout
+await mongoose.connect(MONGODB_URI, {
+  serverSelectionTimeoutMS: 5000,
+  socketTimeoutMS: 45000,
+});
 ```
 
-2. Install dependencies:
-```bash
-npm install
+If MongoDB is unavailable:
+- ✅ Server starts successfully
+- ✅ API endpoints remain accessible
+- ✅ Health endpoint shows database status
+- ⚠️  Database operations return empty results or errors
+
+This ensures the application is always deployable, even without database infrastructure.
+
+## Inventory Schema
+
+```javascript
+{
+  name: String (required),        // Item name
+  category: String,                // Item category
+  quantity: Number (default: 0),   // Current stock level
+  vehicles: [String],              // Compatible vehicle names
+  lowStockThreshold: Number (default: 5),  // Alert threshold
+  timestamps: true                 // Auto-managed createdAt/updatedAt
+}
 ```
 
-3. (Optional) Configure environment variables:
-```bash
-cp .env.example .env
-```
-
-Edit `.env` file with your configuration:
-```env
-PORT=5000
-NODE_ENV=development
-MONGODB_URI=mongodb://localhost:27017/farm-inventory
-```
-
-## Running the Application
-
-### Option 1: Start with npm (recommended)
-```bash
-npm start
-```
-
-### Option 2: Start with node directly
-```bash
-node index.js
-```
-
-### Option 3: Run with custom environment variables
-```bash
-PORT=3000 MONGODB_URI=mongodb://localhost:27017/mydb node index.js
-```
-
-## Available Endpoints
+## API Reference
 
 ### GET /
-Returns API information and status
-```bash
-curl http://localhost:5000/
-```
+Returns API information and available endpoints.
 
-Response:
+**Response:**
 ```json
 {
   "message": "Farm Inventory App Backend is running!",
   "status": "ok",
-  "timestamp": "2026-01-26T20:15:49.775Z"
+  "timestamp": "2026-01-28T13:33:28.009Z",
+  "endpoints": { ... }
 }
 ```
 
 ### GET /health
-Returns server health status including database connection state
-```bash
-curl http://localhost:5000/health
-```
+Returns server health status.
 
-Response:
+**Response:**
 ```json
 {
-  "uptime": 17.576102019,
+  "uptime": 123.45,
   "message": "OK",
-  "timestamp": 1769458552931,
-  "database": "disconnected"
+  "timestamp": 1769607208009,
+  "database": "connected"
 }
 ```
 
-## MongoDB Configuration
+### GET /api/items
+Retrieves all inventory items.
 
-### Local MongoDB
-```env
-MONGODB_URI=mongodb://localhost:27017/farm-inventory
+**Response:** Array of inventory items
+
+### POST /api/items
+Creates a new inventory item.
+
+**Request Body:**
+```json
+{
+  "name": "Oil Filter",
+  "category": "Parts",
+  "quantity": 15,
+  "vehicles": ["Tractor", "Truck"],
+  "lowStockThreshold": 5
+}
 ```
 
-### MongoDB Atlas (Cloud)
-```env
-MONGODB_URI=mongodb+srv://username:password@cluster.mongodb.net/farm-inventory?retryWrites=true&w=majority
+**Response:** Created item with ID
+
+### GET /api/items/low-stock
+Retrieves items where quantity ≤ lowStockThreshold.
+
+**Response:** Array of low stock items
+
+### GET /api/items/:id
+Retrieves a specific item by MongoDB ObjectId.
+
+**Response:** Item object or 404 error
+
+### PUT /api/items/:id
+Updates an existing item.
+
+**Request Body:** Partial or complete item object
+
+**Response:** Updated item or 404 error
+
+### DELETE /api/items/:id
+Deletes an item by ID.
+
+**Response:**
+```json
+{
+  "message": "Item deleted successfully"
+}
 ```
 
-### Docker MongoDB
-```env
-MONGODB_URI=mongodb://mongo:27017/farm-inventory
+## Environment Variables
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `PORT` | `5000` | Server port |
+| `NODE_ENV` | `development` | Environment mode |
+| `MONGODB_URI` | `mongodb://localhost:27017/farm-inventory` | MongoDB connection string |
+
+## Installation & Setup
+
+1. **Install dependencies:**
+   ```bash
+   npm install
+   ```
+
+2. **Configure environment (optional):**
+   ```bash
+   cp .env.example .env
+   # Edit .env with your settings
+   ```
+
+3. **Start the server:**
+   ```bash
+   npm start
+   ```
+
+## Testing
+
+### Manual Testing
+
+```bash
+# Test server health
+curl http://localhost:5000/health
+
+# Create a test item
+curl -X POST http://localhost:5000/api/items \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "Spark Plug",
+    "category": "Engine Parts",
+    "quantity": 20,
+    "vehicles": ["Tractor"],
+    "lowStockThreshold": 10
+  }'
+
+# Get all items
+curl http://localhost:5000/api/items
+
+# Test low stock (after creating items below threshold)
+curl http://localhost:5000/api/items/low-stock
 ```
 
-## Fallback Mode
+### Fallback Testing
 
-The server is designed to start successfully even without MongoDB connection. When MongoDB is unavailable:
-- ✅ Server starts normally on specified port
-- ✅ Health endpoint shows database as "disconnected"
-- ⚠️ Database-dependent features will not be available
-- ℹ️ Helpful warning messages guide you to configure MONGODB_URI
+1. Start server without MongoDB:
+   ```bash
+   MONGODB_URI=mongodb://invalid:27017/test npm start
+   ```
+
+2. Verify server starts successfully
+3. Check health endpoint shows `"database": "disconnected"`
+4. API calls will return empty arrays or connection errors
 
 ## Error Handling
 
-The application includes comprehensive error handling:
-- **Uncaught Exceptions**: Logged with stack trace, server continues running
-- **Unhandled Promise Rejections**: Logged with details, server continues running
-- **MongoDB Connection Errors**: Gracefully handled with fallback mode
-- **Request Errors**: Custom error middleware returns JSON responses
-- **404 Errors**: Informative responses with available routes
+### Global Handlers
+- **Uncaught Exceptions**: Logged with stack trace, server continues
+- **Unhandled Rejections**: Logged with details, server continues
+- **404 Errors**: Returns list of available routes
+- **API Errors**: Returns JSON with error message and status code
 
-## Graceful Shutdown
+### Graceful Shutdown
+- SIGINT (Ctrl+C): Closes MongoDB connection, exits cleanly
+- SIGTERM: Closes MongoDB connection, exits cleanly
 
-The server handles shutdown signals properly:
-- `CTRL+C` (SIGINT) - Closes MongoDB connection and exits cleanly
-- `SIGTERM` - Closes MongoDB connection and exits cleanly
+## Security
 
-## Logging
+### Vulnerabilities Addressed
+- Upgraded Mongoose from 5.10.9 to 6.13.8
+- Patches search injection CVEs (< 6.13.5, < 6.13.6)
+- npm audit: 0 vulnerabilities
 
-The application provides comprehensive logging:
-- 🔄 Connection attempts
-- ✅ Successful operations
-- ⚠️ Warnings (e.g., MongoDB unavailable)
-- ❌ Errors with details
-- 🚀 Startup information
-- 📡 Server configuration
+### Best Practices
+- Environment variables for sensitive data
+- Credential masking in logs
+- Input validation via Mongoose schemas
+- Error messages don't leak system information
+
+## Development Tips
+
+### Adding New Routes
+Add routes before the 404 handler:
+```javascript
+app.get('/api/custom', async (req, res) => {
+  // Your logic
+  res.json({ data: 'value' });
+});
+```
+
+### Mongoose Schema Changes
+Update the inventorySchema and restart:
+```javascript
+const inventorySchema = new mongoose.Schema({
+  // Add new fields
+  newField: { type: String, default: '' }
+});
+```
+
+### Debugging
+Enable detailed logs:
+```javascript
+mongoose.set('debug', true);
+```
 
 ## Troubleshooting
 
-### Server won't start
-1. Check if port is already in use:
-   ```bash
-   lsof -i :5000
-   ```
-2. Try a different port:
-   ```bash
-   PORT=3000 npm start
-   ```
+### Port already in use
+```bash
+# Find process using port 5000
+lsof -i :5000
+
+# Use different port
+PORT=3000 npm start
+```
 
 ### MongoDB connection fails
-1. Verify MongoDB is running:
-   ```bash
-   # For local MongoDB
-   mongod --version
-   ```
-2. Check MONGODB_URI is correct in `.env`
-3. Server will run in fallback mode - database features will be unavailable
+- Verify MongoDB is running: `mongod --version`
+- Check MONGODB_URI in .env
+- Server will run in fallback mode
 
 ### Dependencies not found
 ```bash
@@ -168,36 +255,14 @@ rm -rf node_modules package-lock.json
 npm install
 ```
 
-## Development
-
-### Project Structure
-```
-backend/
-├── index.js           # Main entry point
-├── package.json       # Dependencies and scripts
-├── package-lock.json  # Locked dependency versions
-├── .env.example       # Environment variable template
-└── README.md          # This file
-```
-
-### Adding New Routes
-Edit `index.js` and add routes before the 404 handler:
-```javascript
-app.get('/api/items', (req, res) => {
-  // Your route logic
-  res.json({ items: [] });
-});
-```
-
-### Future Enhancements
-- Add route modules for better organization
-- Implement authentication/authorization
-- Add API routes for farm inventory management
-- Implement data models with Mongoose schemas
-- Add request validation
-- Add rate limiting
-- Add CORS configuration
-- Add unit and integration tests
+## Future Enhancements
+- Authentication/authorization
+- Request validation middleware
+- Rate limiting
+- CORS configuration
+- Unit and integration tests
+- API documentation (Swagger/OpenAPI)
+- Logging framework (Winston/Morgan)
 
 ## License
-This project is part of the Farm Inventory App.
+Part of the Farm Inventory App project.

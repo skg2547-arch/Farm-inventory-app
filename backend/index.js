@@ -13,12 +13,34 @@ const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/farm-i
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// Basic route for health check
+// Inventory Schema
+// Defines the structure for farm inventory items with name, category, quantity, compatible vehicles, and low stock threshold
+const inventorySchema = new mongoose.Schema({
+  name: { type: String, required: true },
+  category: String,
+  quantity: { type: Number, default: 0 },
+  vehicles: [String],  // Array of vehicle names this item is compatible with
+  lowStockThreshold: { type: Number, default: 5 }
+}, { timestamps: true });
+
+const Inventory = mongoose.model('Inventory', inventorySchema);
+
+// Basic route for API information
 app.get('/', (req, res) => {
   res.json({
     message: 'Farm Inventory App Backend is running!',
     status: 'ok',
-    timestamp: new Date().toISOString()
+    timestamp: new Date().toISOString(),
+    endpoints: {
+      'GET /': 'API information',
+      'GET /health': 'Health check',
+      'GET /api/items': 'Get all inventory items',
+      'POST /api/items': 'Create a new inventory item',
+      'GET /api/items/low-stock': 'Get low stock items',
+      'GET /api/items/:id': 'Get a specific item',
+      'PUT /api/items/:id': 'Update an item',
+      'DELETE /api/items/:id': 'Delete an item'
+    }
   });
 });
 
@@ -33,6 +55,7 @@ app.get('/health', (req, res) => {
 });
 
 // MongoDB Connection with proper error handling
+// Implements graceful fallback pattern - server starts successfully even without database
 const connectDB = async () => {
   try {
     console.log('🔄 Attempting to connect to MongoDB...');
@@ -64,6 +87,119 @@ mongoose.connection.on('error', (err) => {
 
 mongoose.connection.on('disconnected', () => {
   console.log('🔌 Mongoose disconnected from MongoDB');
+});
+
+// Middleware to check database connection for API routes
+// Implements graceful degradation by returning informative errors when database is unavailable
+const checkDatabaseConnection = (req, res, next) => {
+  if (mongoose.connection.readyState !== 1) {
+    return res.status(503).json({
+      error: 'Database unavailable',
+      message: 'MongoDB is not currently connected. Database features are unavailable in fallback mode.',
+      database: 'disconnected'
+    });
+  }
+  next();
+};
+
+// Inventory API Routes
+
+// Get low stock items (must be before /:id to avoid matching 'low-stock' as an ID)
+app.get('/api/items/low-stock', checkDatabaseConnection, async (req, res) => {
+  try {
+    const items = await Inventory.find({ $expr: { $lte: ['$quantity', '$lowStockThreshold'] } });
+    res.json(items);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Get all inventory items
+app.get('/api/items', checkDatabaseConnection, async (req, res) => {
+  try {
+    const items = await Inventory.find();
+    res.json(items);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Get a specific item
+app.get('/api/items/:id', checkDatabaseConnection, async (req, res) => {
+  try {
+    const item = await Inventory.findById(req.params.id);
+    if (!item) {
+      return res.status(404).json({ error: 'Item not found' });
+    }
+    res.json(item);
+  } catch (error) {
+    // Handle invalid MongoDB ObjectId format
+    if (error.name === 'CastError') {
+      return res.status(400).json({ error: 'Invalid item ID format' });
+    }
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Create a new item
+app.post('/api/items', checkDatabaseConnection, async (req, res) => {
+  try {
+    // Basic validation - Mongoose schema handles detailed validation
+    if (!req.body.name) {
+      return res.status(400).json({ error: 'Item name is required' });
+    }
+    
+    const item = new Inventory(req.body);
+    await item.save();
+    res.status(201).json(item);
+  } catch (error) {
+    // Handle validation errors
+    if (error.name === 'ValidationError') {
+      return res.status(400).json({ error: error.message });
+    }
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Update an item
+app.put('/api/items/:id', checkDatabaseConnection, async (req, res) => {
+  try {
+    const item = await Inventory.findByIdAndUpdate(req.params.id, req.body, { 
+      new: true,
+      runValidators: true  // Ensure schema validation runs on updates
+    });
+    if (!item) {
+      return res.status(404).json({ error: 'Item not found' });
+    }
+    res.json(item);
+  } catch (error) {
+    // Handle invalid MongoDB ObjectId format
+    if (error.name === 'CastError') {
+      return res.status(400).json({ error: 'Invalid item ID format' });
+    }
+    // Handle validation errors
+    if (error.name === 'ValidationError') {
+      return res.status(400).json({ error: error.message });
+    }
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Delete an item
+app.delete('/api/items/:id', checkDatabaseConnection, async (req, res) => {
+  try {
+    const item = await Inventory.findByIdAndDelete(req.params.id);
+    if (!item) {
+      return res.status(404).json({ error: 'Item not found' });
+    }
+    res.json({ message: 'Item deleted successfully' });
+  } catch (error) {
+    // Handle invalid MongoDB ObjectId format
+    if (error.name === 'CastError') {
+      return res.status(400).json({ error: 'Invalid item ID format' });
+    }
+    res.status(500).json({ error: error.message });
+  }
 });
 
 // Graceful shutdown
@@ -109,12 +245,22 @@ app.use((req, res) => {
   res.status(404).json({
     error: 'Not Found',
     message: `Route ${req.method} ${req.path} not found`,
-    availableRoutes: ['GET /', 'GET /health']
+    availableRoutes: [
+      'GET /',
+      'GET /health',
+      'GET /api/items',
+      'POST /api/items',
+      'GET /api/items/low-stock',
+      'GET /api/items/:id',
+      'PUT /api/items/:id',
+      'DELETE /api/items/:id'
+    ]
   });
 });
 
 // Error handling middleware
-app.use((err, req, res, next) => {
+// Note: 'next' parameter required for Express to recognize this as error handler
+app.use((err, req, res, _next) => {
   console.error('❌ Error occurred:', err);
   res.status(err.status || 500).json({
     error: err.message || 'Internal Server Error',
@@ -143,8 +289,14 @@ const startServer = async () => {
       console.log('='.repeat(60));
       console.log('');
       console.log('Available endpoints:');
-      console.log('  GET  /        - API information');
-      console.log('  GET  /health  - Health check');
+      console.log('  GET  /              - API information');
+      console.log('  GET  /health        - Health check');
+      console.log('  GET  /api/items     - Get all inventory items');
+      console.log('  POST /api/items     - Create a new inventory item');
+      console.log('  GET  /api/items/low-stock - Get low stock items');
+      console.log('  GET  /api/items/:id - Get a specific item');
+      console.log('  PUT  /api/items/:id - Update an item');
+      console.log('  DELETE /api/items/:id - Delete an item');
       console.log('');
       if (mongoose.connection.readyState !== 1) {
         console.log('⚠️  TIP: Set MONGODB_URI environment variable to enable database features');
